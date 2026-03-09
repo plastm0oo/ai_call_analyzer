@@ -1,14 +1,23 @@
+import whisper
+
+try:
+    model = whisper.load_model("base")
+except Exception as e:
+    model = None
+    print(f"Whisper model loading failed: {e}")
+
 def transcribe_audio(file_path: str) -> str:
-    """
-    Stub for Speech-to-Text.
-    Later you can replace this with Whisper or another STT engine.
-    """
-    return (
-        "Менеджер: Добрый день! Меня зовут Анна, компания Альфа. "
-        "Подскажите, пожалуйста, удобно сейчас говорить? "
-        "Клиент: Да, удобно. "
-        "Менеджер: Хотела уточнить, интересует ли вас автоматизация продаж? "
-        "Клиент: Да, расскажите подробнее. "
-        "Менеджер: У нас есть решение, которое помогает анализировать звонки и повышать конверсию. "
-        "Клиент: Хорошо, интересно."
-    )
+    if model is None:
+        raise RuntimeError("Whisper model is not loaded")
+
+    try:
+        result = model.transcribe(file_path, language="ru")
+        text = result.get("text", "").strip()
+
+        if not text:
+            raise ValueError("Empty transcription result")
+
+        return text
+
+    except Exception as e:
+        raise RuntimeError(f"Speech-to-Text failed: {str(e)}")
