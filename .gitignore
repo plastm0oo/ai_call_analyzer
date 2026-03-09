@@ -1,2 +1,8 @@
+.venv/
 .env
-__pycache__
+__pycache__/
+
+uploads/
+reports/
+
+.DC_Store

@@ -1,7 +1,7 @@
 import json
 
-from agents import GigaChatAgentPipeline
-from utils import load_text
+from app.llm_module.agents import GigaChatAgentPipeline
+from app.llm_module.utils import load_text
 
 transcript = """
 Менеджер: Добрый день, меня зовут Анна, компания Альфа. Вам удобно говорить?

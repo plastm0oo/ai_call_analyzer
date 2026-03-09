@@ -2,7 +2,7 @@ import json
 import re
 from typing import Any, Dict, List
 
-from gigachat_client import GigaChatClient
+from app.llm_module.gigachat_client import GigaChatClient
 
 
 class GigaChatAgentPipeline:
