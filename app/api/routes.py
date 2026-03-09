@@ -1,6 +1,7 @@
 import os
 import uuid
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from app.schemas.report import UploadCallResponse
 from app.services.speech_to_text import transcribe_audio
 from app.services.pipeline import run_analysis_pipeline
 from app.services.report_service import save_report_to_file
@@ -14,7 +15,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(REPORT_DIR, exist_ok=True)
 
 
-@router.post("/calls/upload")
+@router.post("/calls/upload", response_model=UploadCallResponse)
 async def upload_call(file: UploadFile = File(...)):
     allowed_extensions = (".wav", ".mp3")
 
@@ -30,14 +31,14 @@ async def upload_call(file: UploadFile = File(...)):
 
     try:
         transcript = transcribe_audio(file_path)
-        analysis_result = run_analysis_pipeline(transcript)
-        report_path = save_report_to_file(call_id, analysis_result)
+        analysis_result = run_analysis_pipeline(call_id, transcript)
+        report_path = save_report_to_file(call_id, analysis_result["final_report"])
 
         return {
             "call_id": call_id,
             "filename": file.filename,
-            "transcript": transcript,
-            "report": analysis_result,
+            "transcript": analysis_result["transcript"],
+            "report": analysis_result["final_report"],
             "report_path": report_path,
             "status": "processed"
         }

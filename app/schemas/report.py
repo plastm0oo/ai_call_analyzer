@@ -24,3 +24,12 @@ class ReportSchema(BaseModel):
     script_analysis: Dict[str, Any]
     mistakes: List[MistakeSchema]
     recommendations: List[RecommendationSchema]
+
+
+class UploadCallResponse(BaseModel):
+    call_id: str
+    filename: str
+    transcript: str
+    report: ReportSchema
+    report_path: str
+    status: str

@@ -5,8 +5,16 @@ from app.agents.coaching_agent import CoachingAgent
 from app.agents.report_agent import FinalReportAgent
 
 
-def run_analysis_pipeline(transcript: str) -> dict:
-    data = {"transcript": transcript}
+def run_analysis_pipeline(call_id: str, transcript: str) -> dict:
+    data = {
+        "call_id": call_id,
+        "transcript": transcript,
+        "dialog_structure": [],
+        "script_analysis": {},
+        "mistakes": [],
+        "coaching_recommendations": [],
+        "final_report": {}
+    }
 
     agents = [
         StructuralAgent(),
@@ -19,4 +27,4 @@ def run_analysis_pipeline(transcript: str) -> dict:
     for agent in agents:
         data = agent.run(data)
 
-    return data["final_report"]
+    return data

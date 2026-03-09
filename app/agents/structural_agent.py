@@ -34,5 +34,9 @@ class StructuralAgent(BaseAgent):
             }
         ]
 
-        data["dialog_structure"] = stages
+        data["dialog_structure"] = [
+            {"stage": "Приветствие", "replicas": ["..."]},
+            {"stage": "Выявление потребности", "replicas": ["..."]}
+        ]
+
         return data
