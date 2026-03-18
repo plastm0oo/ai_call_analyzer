@@ -1,6 +1,6 @@
 import os
 import nltk
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from sentence_transformers import SentenceTransformer
 import chromadb
 from chromadb.config import Settings
@@ -12,6 +12,7 @@ EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 CHROMA_DIR = "./chroma_db"
 COLLECTION_NAME = "knowledge_base"
 KNOWLEDGE_DIR = os.path.join(os.path.dirname(__file__), "knowledge")
+SIMILARITY_THRESHOLD = 0.3
 
 _model = None
 _client = None
@@ -52,6 +53,13 @@ def split_into_chunks(text: str, chunk_size: int = 500, overlap: int = 50) -> Li
 def index_knowledge_files():
     collection = get_chroma_collection()
     model = get_embedding_model()
+    
+    try:
+        collection.delete(where={})
+        print("Cleared existing collection")
+    except:
+        pass
+    
     for filename in os.listdir(KNOWLEDGE_DIR):
         if not filename.endswith(".txt"):
             continue
@@ -77,19 +85,51 @@ def index_knowledge_files():
         )
         print(f"Indexed {len(chunks)} chunks from {filename}")
 
-def retrieve_knowledge(query: str, top_k: int = 5, filter_type: Optional[str] = None) -> List[str]:
+def retrieve_knowledge(query: str, top_k: int = 5, filter_type: Optional[str] = None) -> Tuple[List[str], dict]:
     collection = get_chroma_collection()
     model = get_embedding_model()
     query_embedding = model.encode([query]).tolist()[0]
     where = {"type": filter_type} if filter_type else None
+    
     results = collection.query(
         query_embeddings=[query_embedding],
-        n_results=top_k,
+        n_results=top_k * 2,
         where=where
     )
-    if results and results['documents']:
-        return results['documents'][0]
-    return []
+    
+    metadata = {
+        "type": filter_type,
+        "requested_k": top_k,
+        "found_count": 0,
+        "filtered_count": 0,
+        "used_fallback": False
+    }
+    
+    if not results or not results['documents'] or not results['documents'][0]:
+        metadata["found_count"] = 0
+        metadata["filtered_count"] = 0
+        return [], metadata
+    
+    documents = results['documents'][0]
+    distances = results['distances'][0] if 'distances' in results else [1.0] * len(documents)
+    
+    metadata["found_count"] = len(documents)
+    
+    filtered_docs = []
+    for doc, dist in zip(documents, distances):
+        if dist < SIMILARITY_THRESHOLD:
+            filtered_docs.append(doc)
+    
+    metadata["filtered_count"] = len(filtered_docs)
+    
+    if not filtered_docs and documents:
+        filtered_docs = documents[:top_k]
+        metadata["used_fallback"] = True
+    
+    result_docs = filtered_docs[:top_k]
+    
+    return result_docs, metadata
 
-if __name__ == "__main__":
-    index_knowledge_files() 
+def retrieve_knowledge_simple(query: str, top_k: int = 5, filter_type: Optional[str] = None) -> List[str]:
+    docs, _ = retrieve_knowledge(query, top_k, filter_type)
+    return docs

@@ -23,13 +23,29 @@ def load_knowledge_fallback() -> Dict[str, str]:
 def load_knowledge_for_transcript(transcript: str) -> Dict[str, str]:
     knowledge_texts = {}
     knowledge_types = ["stages", "script", "criteria", "coach_tips"]
+    
+    knowledge_sources = {}
+    
     for ktype in knowledge_types:
-        chunks = retrieve_knowledge(transcript, top_k=3, filter_type=ktype)
+        chunks, metadata = retrieve_knowledge(transcript, top_k=3, filter_type=ktype)
         if chunks:
             knowledge_texts[f"{ktype}_text"] = "\n\n".join(chunks)
+            knowledge_sources[ktype] = {
+                "source": "rag",
+                "chunks_count": len(chunks),
+                "filtered": metadata["filtered_count"],
+                "found": metadata["found_count"],
+                "used_fallback": metadata["used_fallback"]
+            }
         else:
             file_path = KNOWLEDGE_DIR / f"{ktype}.txt"
             knowledge_texts[f"{ktype}_text"] = file_path.read_text(encoding="utf-8").strip()
+            knowledge_sources[ktype] = {
+                "source": "full_file",
+                "file": f"{ktype}.txt"
+            }
+        print(f"KNOWLEDGE [{ktype}]: {knowledge_sources[ktype]}")
+    
     return knowledge_texts
 
 def _normalize_dialog_stages(structure_result: Dict[str, Any]) -> List[Dict[str, Any]]:
