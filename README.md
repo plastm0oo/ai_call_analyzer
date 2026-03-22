@@ -36,51 +36,113 @@ chromadb
 sentence-transformers
 nltk
 
-🔧 Установка
-1. Клонировать репозиторий
+## ⚙️ Установка (Windows / macOS / Linux)
+
+### 1. Клонировать репозиторий
+
+```bash
 git clone <your-repo-url>
 cd ai_call_analyzer
-2. Установить зависимости backend
+```
+
+---
+
+## 🐍 Backend
+
+### Установка зависимостей
+
+```bash
 pip install fastapi uvicorn python-multipart
 pip install openai-whisper torch
 pip install nltk chromadb sentence-transformers
 pip install python-docx reportlab
 pip install requests python-dotenv
-3. Установить ffmpeg
-Windows:
+```
+
+---
+
+## 🎧 Установка ffmpeg
+
+### macOS (через Homebrew)
+
+```bash
+brew install ffmpeg
+```
+
+---
+
+### Windows
+
+```bash
 winget install Gyan.FFmpeg
+```
 
-Проверка:
+или скачать вручную:
+https://ffmpeg.org/download.html
 
+---
+
+### Linux (Ubuntu)
+
+```bash
+sudo apt update
+sudo apt install ffmpeg
+```
+
+---
+
+### Проверка
+
+```bash
 ffmpeg -version
-4. Настроить переменные окружения
+```
 
-Создать файл .env в корне проекта:
+---
 
+## 🔐 Переменные окружения
+
+Создай файл `.env` в корне проекта:
+
+```env
 GIGACHAT_AUTH_KEY=ВАШ_КЛЮЧ
 GIGACHAT_SCOPE=GIGACHAT_API_PERS
 GIGACHAT_MODEL=GigaChat-2-Pro
 GIGACHAT_AUTH_URL=https://ngw.devices.sberbank.ru:9443/api/v2/oauth
 GIGACHAT_API_URL=https://gigachat.devices.sberbank.ru/api/v1/chat/completions
-5. Установить frontend
-cd frontend
-npm install
-▶️ Запуск
-Backend (из корня проекта)
+```
+
+---
+
+## ▶️ Запуск backend
+
+```bash
 uvicorn app.main:app --reload
+```
 
 Проверка:
 
+```text
 http://127.0.0.1:8000/health
-Frontend
+```
+
+---
+
+## 🌐 Frontend
+
+```bash
 cd frontend
+npm install
 npm run dev
+```
 
-Открой в браузере:
+Открой:
 
+```text
 http://localhost:5173
+```
 
-(порт может отличаться — смотри в терминале)
+*(порт может отличаться)*
+
 
 📥 Использование
 Загрузить .wav или .mp3 файл
@@ -109,15 +171,7 @@ coach_tips.txt — рекомендации
 эмбеддинги (multilingual-e5-small)
 хранение в ChromaDB
 поиск релевантных фрагментов при анализе
-⚠️ Важно
-Не коммитить:
-.env
-uploads/
-reports/
-chroma_db/
-.cache/
-.idea/
-__pycache__/
+
 🐛 Возможные проблемы
 ❌ ffmpeg не найден
 Speech-to-Text failed: WinError 2
