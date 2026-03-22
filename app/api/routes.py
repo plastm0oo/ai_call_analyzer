@@ -1,10 +1,13 @@
 import os
 import uuid
+import traceback
+
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.schemas.report import UploadCallResponse
 from app.services.speech_to_text import transcribe_audio
 from app.services.pipeline import run_analysis_pipeline
 from app.services.report_service import save_report_to_file
+
 
 router = APIRouter()
 
@@ -43,5 +46,13 @@ async def upload_call(file: UploadFile = File(...)):
             "status": "processed"
         }
 
+
     except Exception as e:
+
+        print("\n\n BACKEND ERROR ")
+
+        traceback.print_exc()
+
+        print("ERROR MESSAGE:", str(e), "\n\n")
+
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
