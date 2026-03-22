@@ -1,7 +1,7 @@
 import whisper
 
 try:
-    model = whisper.load_model("base")
+    model = whisper.load_model("large")
 except Exception as e:
     model = None
     print(f"Whisper model loading failed: {e}")

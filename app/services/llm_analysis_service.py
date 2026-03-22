@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -24,16 +25,6 @@ def load_knowledge() -> Dict[str, str]:
 
 
 def _normalize_dialog_stages(structure_result: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    Преобразуем результат LLM-агента структуры
-    в формат, который понимает ваш ReportSchema:
-    [
-      {
-        "stage": "...",
-        "replicas": ["...", "..."]
-      }
-    ]
-    """
     normalized = []
 
     for stage_item in structure_result.get("stages", []):
@@ -41,6 +32,7 @@ def _normalize_dialog_stages(structure_result: Dict[str, Any]) -> List[Dict[str,
             continue
 
         stage_name = str(stage_item.get("stage", "")).strip()
+        found = bool(stage_item.get("found", False))
         quotes = stage_item.get("quotes", [])
 
         if not isinstance(quotes, list):
@@ -50,6 +42,7 @@ def _normalize_dialog_stages(structure_result: Dict[str, Any]) -> List[Dict[str,
 
         normalized.append({
             "stage": stage_name,
+            "found": found,
             "replicas": replicas
         })
 
@@ -57,15 +50,6 @@ def _normalize_dialog_stages(structure_result: Dict[str, Any]) -> List[Dict[str,
 
 
 def _normalize_script_analysis(script_check_result: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Приводим результат проверки скрипта к виду:
-    {
-      "followed_score": 85,
-      "missing_stages": [...],
-      "violations": [...],
-      "comment": "..."
-    }
-    """
     score = script_check_result.get("score", 0)
     try:
         score = int(score)
@@ -89,93 +73,91 @@ def _normalize_script_analysis(script_check_result: Dict[str, Any]) -> Dict[str,
 
 
 def _normalize_mistakes(errors_result: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    В вашей схеме MistakeSchema:
-    {
-      "type": "...",
-      "description": "..."
-    }
-
-    У коллег:
-    {
-      "type": "...",
-      "quote": "...",
-      "explanation": "..."
-    }
-
-    Склеиваем quote + explanation в description.
-    """
     normalized = []
 
     for err in errors_result.get("errors", []):
         if not isinstance(err, dict):
             continue
 
-        err_type = str(err.get("type", "")).strip()
-        quote = str(err.get("quote", "")).strip()
-        explanation = str(err.get("explanation", "")).strip()
-
-        if quote and explanation:
-            description = f'Цитата: "{quote}". Пояснение: {explanation}'
-        elif explanation:
-            description = explanation
-        elif quote:
-            description = f'Цитата: "{quote}"'
-        else:
-            description = ""
-
         normalized.append({
-            "type": err_type,
-            "description": description
+            "type": str(err.get("type", "")).strip(),
+            "quote": str(err.get("quote", "")).strip(),
+            "description": str(err.get("explanation", "")).strip()
         })
 
     return normalized
 
-
 def _normalize_recommendations(coaching_result: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    В вашей схеме RecommendationSchema:
-    {
-      "problem": "...",
-      "reason": "...",
-      "recommendation": "..."
-    }
-
-    У коллег в coaching_result["recommendations"] — чаще просто список строк.
-    Поэтому временно упаковываем каждую строку в recommendation,
-    а problem/reason оставляем общими.
-    """
     normalized = []
 
     for rec in coaching_result.get("recommendations", []):
+        if isinstance(rec, dict):
+            rec_type = str(rec.get("type", "")).strip()
+            text = str(
+                rec.get("suggested_text", rec.get("focus", rec.get("recommendation", "")))
+            ).strip()
+
+            if text:
+                normalized.append({
+                    "type": rec_type if rec_type else "общая рекомендация",
+                    "text": text
+                })
+            continue
+
         rec_text = str(rec).strip()
         if not rec_text:
             continue
 
+        try:
+            parsed = ast.literal_eval(rec_text)
+            if isinstance(parsed, dict):
+                rec_type = str(parsed.get("type", "")).strip()
+                text = str(
+                    parsed.get("suggested_text", parsed.get("focus", parsed.get("recommendation", "")))
+                ).strip()
+
+                if text:
+                    normalized.append({
+                        "type": rec_type if rec_type else "общая рекомендация",
+                        "text": text
+                    })
+                    continue
+        except Exception:
+            pass
+
         normalized.append({
-            "problem": "Выявленные ошибки в звонке",
-            "reason": "LLM определила зоны роста по структуре звонка и репликам менеджера",
-            "recommendation": rec_text
+            "type": "общая рекомендация",
+            "text": rec_text
         })
 
     return normalized
 
-
 def _normalize_summary(final_report: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Ваш ReportSchema ждёт:
-    summary: Dict[str, Any]
-
-    А UploadCallResponse использует report.summary.
-    Для единообразия делаем:
-    {
-      "short_summary": "...",
-      "result": "..."
-    }
-    """
     return {
         "short_summary": str(final_report.get("summary", "")).strip(),
         "result": str(final_report.get("conclusion", "")).strip()
+    }
+
+
+def _normalize_meta(final_report: Dict[str, Any], coaching_result: Dict[str, Any]) -> Dict[str, Any]:
+    raw_score = final_report.get("score", 0)
+    try:
+        raw_score = int(raw_score)
+    except Exception:
+        raw_score = 0
+
+    main_errors = final_report.get("main_errors", [])
+    if not isinstance(main_errors, list):
+        main_errors = [str(main_errors)] if main_errors else []
+
+    training_focus = coaching_result.get("training_focus", [])
+    if not isinstance(training_focus, list):
+        training_focus = [str(training_focus)] if training_focus else []
+
+    return {
+        "main_errors": [str(x).strip() for x in main_errors if str(x).strip()],
+        "training_focus": [str(x).strip() for x in training_focus if str(x).strip()],
+        "raw_score": raw_score
     }
 
 
@@ -184,10 +166,6 @@ def normalize_llm_result(
     transcript: str,
     raw_result: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """
-    Приводим сырой output коллегиного LLM pipeline
-    к вашему общему backend-формату.
-    """
     structure_result = raw_result.get("structure_result", {})
     script_check_result = raw_result.get("script_check_result", {})
     errors_result = raw_result.get("errors_result", {})
@@ -200,13 +178,15 @@ def normalize_llm_result(
     mistakes = _normalize_mistakes(errors_result)
     coaching_recommendations = _normalize_recommendations(coaching_result)
     summary = _normalize_summary(final_report)
+    meta = _normalize_meta(final_report, coaching_result)
 
     normalized_final_report = {
         "summary": summary,
         "dialog_stages": dialog_structure,
         "script_analysis": script_analysis,
         "mistakes": mistakes,
-        "recommendations": coaching_recommendations
+        "recommendations": coaching_recommendations,
+        "meta": meta
     }
 
     return {
@@ -223,12 +203,6 @@ def normalize_llm_result(
 
 
 def run_llm_analysis(call_id: str, transcript: str, debug: bool = True) -> Dict[str, Any]:
-    """
-    Главная точка входа для backend:
-    - грузим knowledge
-    - запускаем LLM pipeline коллег
-    - нормализуем результат под ваш backend
-    """
     if not transcript or not transcript.strip():
         raise ValueError("Transcript is empty")
 
