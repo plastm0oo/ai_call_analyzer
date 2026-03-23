@@ -7,13 +7,17 @@ from app.services.speech_to_text import transcribe_audio
 from app.services.pipeline import run_analysis_pipeline
 from app.services.report_service import save_report_to_file
 from app.db.session import get_db
+from fastapi.responses import FileResponse
+from app.services.coaching_report_service import CoachingReportService
 
 router = APIRouter()
 
 MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB
 UPLOAD_DIR = "uploads"
 REPORT_DIR = "reports"
+PDF_DIR = os.path.join(REPORT_DIR, "pdf")
 
+os.makedirs(PDF_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(REPORT_DIR, exist_ok=True)
 
@@ -62,3 +66,32 @@ async def upload_call(file: UploadFile = File(...)):
         print("ERROR MESSAGE:", str(e), "\n\n")
 
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+    
+pdf_service = CoachingReportService(reports_dir=REPORT_DIR)
+
+@router.get("/calls/{call_id}/download/pdf")
+async def download_call_pdf(call_id: str):
+    try:
+        pdf_path = pdf_service.get_or_create_pdf(call_id)
+
+        return FileResponse(
+            path=pdf_path,
+            media_type="application/pdf",
+            filename=f"coaching_report_{call_id}.pdf",
+        )
+
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Report JSON for call_id={call_id} not found"
+        )
+
+    except Exception as e:
+        print("\n\n PDF DOWNLOAD ERROR ")
+        traceback.print_exc()
+        print("ERROR MESSAGE:", str(e), "\n\n")
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"PDF generation failed: {str(e)}"
+        )
