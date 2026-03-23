@@ -9,7 +9,7 @@ from app.services.report_service import save_report_to_file
 
 router = APIRouter()
 
-MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 150 MB
+MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB
 UPLOAD_DIR = "uploads"
 REPORT_DIR = "reports"
 
