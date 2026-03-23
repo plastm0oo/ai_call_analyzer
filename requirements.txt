@@ -4,3 +4,6 @@ python-multipart
 pydantic
 openai-whisper
 python-dotenv
+chromadb
+sentence-transformers
+nltk

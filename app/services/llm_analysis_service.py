@@ -3,10 +3,9 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from app.llm_module.agents import GigaChatAgentPipeline
-
+from app.llm_module.rag import retrieve_knowledge
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent.parent / "llm_module" / "knowledge"
-
 
 def _read_text_file(filename: str) -> str:
     path = KNOWLEDGE_DIR / filename
@@ -14,8 +13,7 @@ def _read_text_file(filename: str) -> str:
         raise FileNotFoundError(f"Knowledge file not found: {path}")
     return path.read_text(encoding="utf-8").strip()
 
-
-def load_knowledge() -> Dict[str, str]:
+def load_knowledge_fallback() -> Dict[str, str]:
     return {
         "stages_text": _read_text_file("stages.txt"),
         "script_text": _read_text_file("script.txt"),
@@ -23,21 +21,44 @@ def load_knowledge() -> Dict[str, str]:
         "coach_tips_text": _read_text_file("coach_tips.txt"),
     }
 
+def load_knowledge_for_transcript(transcript: str) -> Dict[str, str]:
+    knowledge_texts = {}
+    knowledge_types = ["stages", "script", "criteria", "coach_tips"]
+    
+    knowledge_sources = {}
+    
+    for ktype in knowledge_types:
+        chunks, metadata = retrieve_knowledge(transcript, top_k=3, filter_type=ktype)
+        if chunks:
+            knowledge_texts[f"{ktype}_text"] = "\n\n".join(chunks)
+            knowledge_sources[ktype] = {
+                "source": "rag",
+                "chunks_count": len(chunks),
+                "filtered": metadata["filtered_count"],
+                "found": metadata["found_count"],
+                "used_fallback": metadata["used_fallback"]
+            }
+        else:
+            file_path = KNOWLEDGE_DIR / f"{ktype}.txt"
+            knowledge_texts[f"{ktype}_text"] = file_path.read_text(encoding="utf-8").strip()
+            knowledge_sources[ktype] = {
+                "source": "full_file",
+                "file": f"{ktype}.txt"
+            }
+        print(f"KNOWLEDGE [{ktype}]: {knowledge_sources[ktype]}")
+    
+    return knowledge_texts
 
 def _normalize_dialog_stages(structure_result: Dict[str, Any]) -> List[Dict[str, Any]]:
     normalized = []
-
     for stage_item in structure_result.get("stages", []):
         if not isinstance(stage_item, dict):
             continue
-
         stage_name = str(stage_item.get("stage", "")).strip()
         found = bool(stage_item.get("found", False))
         quotes = stage_item.get("quotes", [])
-
         if not isinstance(quotes, list):
             quotes = [str(quotes)] if quotes else []
-
         replicas = [str(q).strip() for q in quotes if str(q).strip()]
 
         normalized.append({
@@ -48,22 +69,18 @@ def _normalize_dialog_stages(structure_result: Dict[str, Any]) -> List[Dict[str,
 
     return normalized
 
-
 def _normalize_script_analysis(script_check_result: Dict[str, Any]) -> Dict[str, Any]:
     score = script_check_result.get("score", 0)
     try:
         score = int(score)
     except Exception:
         score = 0
-
     missing_stages = script_check_result.get("missed_stages", [])
     if not isinstance(missing_stages, list):
         missing_stages = [str(missing_stages)] if missing_stages else []
-
     violations = script_check_result.get("violations", [])
     if not isinstance(violations, list):
         violations = [str(violations)] if violations else []
-
     return {
         "followed_score": max(0, min(100, score)),
         "missing_stages": [str(x).strip() for x in missing_stages if str(x).strip()],
@@ -71,10 +88,8 @@ def _normalize_script_analysis(script_check_result: Dict[str, Any]) -> Dict[str,
         "comment": str(script_check_result.get("comment", "")).strip()
     }
 
-
 def _normalize_mistakes(errors_result: Dict[str, Any]) -> List[Dict[str, Any]]:
     normalized = []
-
     for err in errors_result.get("errors", []):
         if not isinstance(err, dict):
             continue
@@ -89,7 +104,6 @@ def _normalize_mistakes(errors_result: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def _normalize_recommendations(coaching_result: Dict[str, Any]) -> List[Dict[str, Any]]:
     normalized = []
-
     for rec in coaching_result.get("recommendations", []):
         if isinstance(rec, dict):
             rec_type = str(rec.get("type", "")).strip()
@@ -103,7 +117,7 @@ def _normalize_recommendations(coaching_result: Dict[str, Any]) -> List[Dict[str
                     "text": text
                 })
             continue
-
+    
         rec_text = str(rec).strip()
         if not rec_text:
             continue
@@ -129,7 +143,6 @@ def _normalize_recommendations(coaching_result: Dict[str, Any]) -> List[Dict[str
             "type": "общая рекомендация",
             "text": rec_text
         })
-
     return normalized
 
 def _normalize_summary(final_report: Dict[str, Any]) -> Dict[str, Any]:
@@ -137,7 +150,6 @@ def _normalize_summary(final_report: Dict[str, Any]) -> Dict[str, Any]:
         "short_summary": str(final_report.get("summary", "")).strip(),
         "result": str(final_report.get("conclusion", "")).strip()
     }
-
 
 def _normalize_meta(final_report: Dict[str, Any], coaching_result: Dict[str, Any]) -> Dict[str, Any]:
     raw_score = final_report.get("score", 0)
@@ -159,7 +171,6 @@ def _normalize_meta(final_report: Dict[str, Any], coaching_result: Dict[str, Any
         "training_focus": [str(x).strip() for x in training_focus if str(x).strip()],
         "raw_score": raw_score
     }
-
 
 def normalize_llm_result(
     call_id: str,
@@ -201,15 +212,11 @@ def normalize_llm_result(
         "usage": total_usage
     }
 
-
 def run_llm_analysis(call_id: str, transcript: str, debug: bool = True) -> Dict[str, Any]:
     if not transcript or not transcript.strip():
         raise ValueError("Transcript is empty")
-
-    knowledge = load_knowledge()
-
+    knowledge = load_knowledge_for_transcript(transcript)
     pipeline = GigaChatAgentPipeline(debug=debug)
-
     raw_result = pipeline.run_pipeline(
         transcript=transcript,
         stages_text=knowledge["stages_text"],
@@ -217,7 +224,6 @@ def run_llm_analysis(call_id: str, transcript: str, debug: bool = True) -> Dict[
         criteria_text=knowledge["criteria_text"],
         coach_tips_text=knowledge["coach_tips_text"]
     )
-
     return normalize_llm_result(
         call_id=call_id,
         transcript=transcript,
