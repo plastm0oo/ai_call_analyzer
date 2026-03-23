@@ -54,6 +54,7 @@ type UploadResponse = {
 type Screen = "upload" | "processing" | "report";
 
 const API_BASE = "http://127.0.0.1:8000";
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 const DEMO_RESULT: UploadResponse = {
   call_id: "demo-call-001",
@@ -116,7 +117,7 @@ const DEMO_RESULT: UploadResponse = {
       {
         type: "Недостаточная конкретизация выгоды",
         description:
-          'Фраза менеджера звучит корректно, но не переводит продукт в конкретную пользу для бизнеса клиента: экономию времени, рост качества контроля, ускорение обучения менеджеров.',
+          "Фраза менеджера звучит корректно, но не переводит продукт в конкретную пользу для бизнеса клиента: экономию времени, рост качества контроля, ускорение обучения менеджеров.",
       },
     ],
     recommendations: [
@@ -152,6 +153,25 @@ export default function App() {
 
   const handleSelectFile = (selected: File | null) => {
     if (!selected) return;
+
+    const lowerName = selected.name.toLowerCase();
+    const isValidExtension =
+      lowerName.endsWith(".wav") || lowerName.endsWith(".mp3");
+
+    if (!isValidExtension) {
+      setError("Можно загружать только файлы .wav и .mp3.");
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
+    if (selected.size > MAX_FILE_SIZE) {
+      setError("Файл слишком большой. Максимальный размер — 100 МБ.");
+      setFile(null);
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
     setFile(selected);
     setError("");
   };
@@ -265,7 +285,7 @@ export default function App() {
                   </div>
 
                   <div className="rounded-full border border-[#DDE8E3] bg-white/55 px-3 py-1.5 text-sm text-[#5D7F73]">
-                    .wav / .mp3
+                    .wav / .mp3 · до 100 МБ
                   </div>
                 </div>
 
@@ -300,6 +320,7 @@ export default function App() {
                   <p className="mt-4 max-w-[420px] text-sm leading-7 text-[#6B6B6B]">
                     После загрузки система расшифрует аудио, проанализирует
                     структуру разговора и сформирует коучинговый отчёт.
+                    Поддерживаются файлы .wav и .mp3 размером до 100 МБ.
                   </p>
 
                   <input
@@ -397,13 +418,27 @@ export default function App() {
               </p>
             </div>
 
-            <button
-              onClick={handleReset}
-              className="inline-flex items-center gap-2 rounded-full border border-[#D9E4DF] bg-white/65 px-5 py-3 text-sm font-medium text-[#364236] transition hover:bg-white"
-            >
-              <ArrowLeft size={16} />
-              Загрузить другой файл
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() =>
+                  window.open(
+                    `${API_BASE}/calls/${result.call_id}/download/pdf`,
+                    "_blank"
+                  )
+                }
+                className="inline-flex items-center gap-2 rounded-full border border-[#D9E4DF] bg-white/65 px-5 py-3 text-sm font-medium text-[#364236] transition hover:bg-white"
+              >
+                Скачать PDF
+              </button>
+
+              <button
+                onClick={handleReset}
+                className="inline-flex items-center gap-2 rounded-full border border-[#D9E4DF] bg-white/65 px-5 py-3 text-sm font-medium text-[#364236] transition hover:bg-white"
+              >
+                <ArrowLeft size={16} />
+                Загрузить другой файл
+              </button>
+            </div>
           </div>
 
           {error && (
