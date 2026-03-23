@@ -6,6 +6,7 @@ from app.schemas.report import UploadCallResponse
 from app.services.speech_to_text import transcribe_audio
 from app.services.pipeline import run_analysis_pipeline
 from app.services.report_service import save_report_to_file
+from app.db.session import get_db
 
 router = APIRouter()
 
