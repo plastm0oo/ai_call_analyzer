@@ -23,6 +23,7 @@ class MistakeSchema(BaseModel):
 
 class RecommendationSchema(BaseModel):
     type: str
+    category: str
     text: str
 
 class MetaSchema(BaseModel):
@@ -42,6 +43,7 @@ class UploadCallResponse(BaseModel):
     call_id: str
     filename: str
     transcript: str
+    role_transcript: Optional[str] = None
     report: ReportSchema
     report_path: str
     status: str

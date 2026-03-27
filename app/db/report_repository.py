@@ -3,10 +3,8 @@ from __future__ import annotations
 import ast
 import json
 from typing import Any
-
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-
 
 class CoachingReportRepository:
     def save_report(

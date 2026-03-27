@@ -6,7 +6,7 @@ from app.schemas.report import UploadCallResponse
 from app.services.speech_to_text import transcribe_audio
 from app.services.pipeline import run_analysis_pipeline
 from app.services.report_service import save_report_to_file
-from app.db.session import get_db
+#from app.db.session import get_db
 from fastapi.responses import FileResponse
 from app.services.coaching_report_service import CoachingReportService
 
@@ -33,25 +33,39 @@ async def upload_call(file: UploadFile = File(...)):
     if len(content) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(
             status_code=413,
-            detail="File is too large. Maximum allowed size is 150 MB."
+            detail="File is too large. Maximum allowed size is 100 MB."
         )
     
     call_id = str(uuid.uuid4())
     file_path = os.path.join(UPLOAD_DIR, f"{call_id}_{file.filename}")
 
     with open(file_path, "wb") as f:
-        #content = await file.read()
         f.write(content)
 
     try:
         transcript = transcribe_audio(file_path)
         analysis_result = run_analysis_pipeline(call_id, transcript)
+
+        #del
+        print("ROLE_EQUALS_RAW:", analysis_result.get("role_transcript") == analysis_result.get("transcript"))
+        print("ROLE_HAS_LABELS:", "Менеджер:" in analysis_result.get("role_transcript", "") or "Клиент:" in analysis_result.get("role_transcript", ""))
+
+        display_transcript = analysis_result.get("role_transcript") or analysis_result["transcript"]
         report_path = save_report_to_file(call_id, analysis_result["final_report"])
 
+        # routes.py прямо перед return
+        print("API RESPONSE SNAPSHOT:", {
+            "transcript_preview": analysis_result.get("transcript", "")[:120],
+            "role_transcript_preview": analysis_result.get("role_transcript", "")[:120],
+            "recommendations_count": len(analysis_result["final_report"].get("recommendations", [])),
+            "short_summary": analysis_result["final_report"].get("summary", {}).get("short_summary"),
+        })
+    
         return {
             "call_id": call_id,
             "filename": file.filename,
-            "transcript": analysis_result["transcript"],
+            "transcript": display_transcript,
+            "role_transcript": analysis_result.get("role_transcript"),
             "report": analysis_result["final_report"],
             "report_path": report_path,
             "status": "processed"

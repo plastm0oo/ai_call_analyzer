@@ -4,7 +4,6 @@ import ast
 from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
-
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -263,6 +262,7 @@ class PDFReportBuilder:
                 description = item.get("description")
                 example = item.get("example")
                 suggestion = item.get("suggestion") or item.get("suggestedText")
+                recommendation = item.get("recommendation")
                 rtype = item.get("type")
 
                 parts = []
@@ -270,6 +270,8 @@ class PDFReportBuilder:
                     parts.append(str(rtype))
                 if description:
                     parts.append(str(description))
+                if recommendation:
+                    parts.append(str(recommendation))
                 if suggestion:
                     parts.append(str(suggestion))
                 if example:

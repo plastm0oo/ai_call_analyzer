@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-
 from app.services.pdf_report_builder import PDFReportBuilder
-
 
 class CoachingReportService:
     def __init__(self, reports_dir: str = "reports") -> None:
