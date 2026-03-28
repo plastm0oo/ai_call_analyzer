@@ -359,21 +359,17 @@ def _normalize_summary(raw, raw_summary, classification_result, structure_result
         short_summary = _clean_str(raw_summary)
         result_text = ""
 
-    result_text = _first_nonempty_str(
-        raw.get("conclusion"),
-        result_text,
-        raw_script.get("comment"),
-        script_check_result.get("comment"),
-        classification_result.get("reason"),
-        structure_result.get("summary"),
-    )
-
     short_summary = _first_nonempty_str(
         short_summary,
         classification_result.get("short_summary"),
         classification_result.get("summary"),
         structure_result.get("summary"),
+    )
+
+    result_text = _first_nonempty_str(
+        raw.get("conclusion"),
         result_text,
+        classification_result.get("reason"),
     )
 
     if not result_text:
@@ -454,15 +450,6 @@ def _normalize_final_report(result: dict) -> dict:
         if _clean_str(x)
     ]
 
-    # внутри _normalize_final_report
-    print("NORMALIZATION SOURCES:", {
-        "raw_summary": raw.get("summary"),
-        "raw_recommendations": raw.get("recommendations"),
-        "coaching_recommendations": coaching_result.get("recommendations"),
-        "classification_summary": classification_result.get("summary"),
-        "structure_summary": structure_result.get("summary"),
-    })
-
     return {
         "summary": summary,
         "dialog_stages": dialog_stages,
@@ -522,13 +509,6 @@ def run_analysis_pipeline(call_id: str, transcript: str) -> dict:
     result["call_id"] = result.get("call_id", call_id)
     result["transcript"] = result.get("transcript", transcript)
     result["usage"] = _as_dict(result.get("usage") or result.get("total_usage"))
-
-    # pipeline.py перед result["final_report"] = _normalize_final_report(result)
-    print("PIPELINE INPUT SNAPSHOT:", {
-        "role_transcript_exists": bool(result.get("role_transcript")),
-        "raw_final_report": result.get("final_report"),
-        "coaching_result": result.get("coaching_result"),
-    })
 
     result["final_report"] = _normalize_final_report(result)
 

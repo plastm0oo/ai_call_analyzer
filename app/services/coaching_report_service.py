@@ -26,6 +26,9 @@ class CoachingReportService:
         with json_path.open("r", encoding="utf-8") as f:
             report_data = json.load(f)
 
+        if not isinstance(report_data, dict):
+            raise ValueError(f"Invalid report JSON for call_id={call_id}")
+        
         generated_pdf_path = self.pdf_builder.build(
             report_data=report_data,
             filename=f"{call_id}.pdf",

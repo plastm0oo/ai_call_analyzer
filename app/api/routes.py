@@ -45,22 +45,9 @@ async def upload_call(file: UploadFile = File(...)):
     try:
         transcript = transcribe_audio(file_path)
         analysis_result = run_analysis_pipeline(call_id, transcript)
-
-        #del
-        print("ROLE_EQUALS_RAW:", analysis_result.get("role_transcript") == analysis_result.get("transcript"))
-        print("ROLE_HAS_LABELS:", "Менеджер:" in analysis_result.get("role_transcript", "") or "Клиент:" in analysis_result.get("role_transcript", ""))
-
         display_transcript = analysis_result.get("role_transcript") or analysis_result["transcript"]
-        report_path = save_report_to_file(call_id, analysis_result["final_report"])
+        report_path = save_report_to_file(call_id, analysis_result)
 
-        # routes.py прямо перед return
-        print("API RESPONSE SNAPSHOT:", {
-            "transcript_preview": analysis_result.get("transcript", "")[:120],
-            "role_transcript_preview": analysis_result.get("role_transcript", "")[:120],
-            "recommendations_count": len(analysis_result["final_report"].get("recommendations", [])),
-            "short_summary": analysis_result["final_report"].get("summary", {}).get("short_summary"),
-        })
-    
         return {
             "call_id": call_id,
             "filename": file.filename,
