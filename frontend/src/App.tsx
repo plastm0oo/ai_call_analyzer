@@ -21,9 +21,12 @@ type Mistake = {
 };
 
 type Recommendation = {
-  problem: string;
-  reason: string;
-  recommendation: string;
+  type: string;
+  category: string;
+  text: string;
+  zone_of_growth?: string;
+  why_important?: string;
+  what_to_improve?: string;
 };
 
 type Report = {
@@ -122,22 +125,64 @@ const DEMO_RESULT: UploadResponse = {
     ],
     recommendations: [
       {
-        problem: "Недостаточно конкретно сформулирована ценность решения",
-        reason:
-          "Клиенту легче принять следующий шаг, если выгода выражена через понятный результат.",
-        recommendation:
-          "На этапе презентации добавляй 1–2 измеримых эффекта: сокращение времени на контроль звонков, ускорение обратной связи, повышение качества скрипта.",
-      },
-      {
-        problem: "Следующий шаг обозначен слишком обобщенно",
-        reason:
-          "Пилот воспринимается лучше, когда у него есть рамка: срок, объём, ожидаемый результат.",
-        recommendation:
-          "Предлагай пилот через конкретный формат: 1 неделя, 10 звонков, итоговый отчёт и встреча по результатам.",
+        type: "value_presentation",
+        category: "presentation",
+        text: "На этапе презентации добавляй 1–2 измеримых эффекта: сокращение времени на контроль звонков, ускорение обратной связи, повышение качества скрипта.",
+        zone_of_growth: "Презентация решения",
+        why_important: "Клиенту легче принять следующий шаг, если выгода выражена через понятный результат.",
+        what_to_improve: "На этапе презентации добавляй 1–2 измеримых эффекта: сокращение времени на контроль звонков, ускорение обратной связи, повышение качества скрипта.",
       },
     ],
   },
 };
+
+function normalizeUploadResponse(data: UploadResponse): UploadResponse {
+  const normalizedRecommendations = (data.report?.recommendations ?? []).map(
+    (item: any) => ({
+      ...item,
+      zone_of_growth:
+        item?.zone_of_growth ??
+        item?.zoneOfGrowth ??
+        item?.problem ??
+        item?.category ??
+        item?.type ??
+        "Не указано",
+      why_important:
+        item?.why_important ??
+        item?.whyImportant ??
+        item?.reason ??
+        "Не указано",
+      what_to_improve:
+        item?.what_to_improve ??
+        item?.whatToImprove ??
+        item?.recommendation ??
+        item?.text ??
+        "Не указано",
+    })
+  );
+
+  const normalizedMissingStages = (data.report?.script_analysis?.missing_stages ?? []).map(
+    (item: any) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && "stage" in item) {
+        return String(item.stage);
+      }
+      return String(item);
+    }
+  );
+
+  return {
+    ...data,
+    report: {
+      ...data.report,
+      recommendations: normalizedRecommendations,
+      script_analysis: {
+        ...data.report.script_analysis,
+        missing_stages: normalizedMissingStages,
+      },
+    },
+  };
+}
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("upload");
@@ -206,7 +251,8 @@ export default function App() {
       }
 
       const data: UploadResponse = await response.json();
-      setResult(data);
+      const normalized = normalizeUploadResponse(data);
+      setResult(normalized);
       setScreen("report");
     } catch (err: any) {
       console.error(err);
@@ -602,21 +648,21 @@ export default function App() {
                         Зона роста
                       </p>
                       <p className="mt-2 text-base font-medium text-[#232323]">
-                        {item.problem || "Не указано"}
+                        {item.zone_of_growth || "Не указано"}
                       </p>
 
                       <p className="mt-4 text-sm uppercase tracking-[0.18em] text-[#818181]">
                         Почему это важно
                       </p>
                       <p className="mt-2 text-sm leading-7 text-[#565656]">
-                        {item.reason || "Не указано"}
+                        {item.why_important || "Не указано"}
                       </p>
 
                       <p className="mt-4 text-sm uppercase tracking-[0.18em] text-[#818181]">
                         Что улучшать
                       </p>
                       <p className="mt-2 text-sm leading-7 text-[#565656]">
-                        {item.recommendation || "Не указано"}
+                        {item.what_to_improve || "Не указано"}
                       </p>
                     </div>
                   ))

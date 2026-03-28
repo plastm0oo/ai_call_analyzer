@@ -1,11 +1,6 @@
 import ast
 
 from app.services.llm_analysis_service import run_llm_analysis
-from app.agents.structural_agent import StructuralAgent
-from app.agents.script_check_agent import ScriptCheckAgent
-from app.agents.mistakes_agent import MistakesAgent
-from app.agents.coaching_agent import CoachingAgent
-from app.agents.report_agent import FinalReportAgent
 
 USE_LLM_PIPELINE = True
 
@@ -21,17 +16,6 @@ def run_stub_pipeline(call_id: str, transcript: str) -> dict:
         "final_report": {},
         "usage": {},
     }
-
-    agents = [
-        StructuralAgent(),
-        ScriptCheckAgent(),
-        MistakesAgent(),
-        CoachingAgent(),
-        FinalReportAgent(),
-    ]
-
-    for agent in agents:
-        data = agent.run(data)
 
     return data
 
@@ -83,6 +67,72 @@ def _pick_score(*values) -> int:
             return max(0, min(100, int(v.strip())))
     return 0
 
+CATEGORY_ALIASES = {
+    "greeting": "greeting",
+    "приветствие": "greeting",
+
+    "needs_assessment": "needs_discovery",
+    "needs_discovery": "needs_discovery",
+    "needs_identification": "needs_discovery",
+    "выявление потребности": "needs_discovery",
+    "выявление потребностей": "needs_discovery",
+
+    "presentation": "presentation",
+    "product_presentation": "presentation",
+    "презентация": "presentation",
+    "презентация решения": "presentation",
+    "презентация продукта": "presentation",
+
+    "handling_questions": "handling_questions",
+    "question_handling": "handling_questions",
+    "работа с вопросами": "handling_questions",
+    "обработка вопросов": "handling_questions",
+    "обработка возражений": "handling_questions",
+
+    "closing": "closing",
+    "closure": "closing",
+    "закрытие": "closing",
+    "следующий шаг": "closing",
+
+    "word_usage": "communication_style",
+    "communication_style": "communication_style",
+    "стиль речи": "communication_style",
+    "коммуникация": "communication_style",
+
+    "general": "general",
+    "общая рекомендация": "general",
+}
+
+CATEGORY_TITLES = {
+    "greeting": "Приветствие",
+    "needs_assessment": "Выявление потребности",
+    "needs_discovery": "Выявление потребности",
+    "presentation": "Презентация решения",
+    "product_presentation": "Презентация решения",
+    "handling_questions": "Работа с вопросами",
+    "closing": "Закрытие",
+    "closure": "Закрытие",
+    "word_usage": "Стиль речи",
+    "general": "Общая рекомендация",
+}
+
+CATEGORY_IMPORTANCE = {
+    "greeting": "Сильное начало разговора формирует доверие и задает тон всему звонку.",
+    "needs_assessment": "Без выявления потребностей предложение звучит слишком общо и хуже попадает в запрос клиента.",
+    "needs_discovery": "Без выявления потребностей предложение звучит слишком общо и хуже попадает в запрос клиента.",
+    "presentation": "Клиенту проще увидеть ценность продукта, когда он связан с его задачами.",
+    "product_presentation": "Клиенту проще увидеть ценность продукта, когда он связан с его задачами.",
+    "handling_questions": "Качественная работа с вопросами помогает снять сомнения и продвинуть клиента дальше по воронке.",
+    "closing": "Без четкого завершения звонок не приводит к следующему шагу.",
+    "closure": "Без четкого завершения звонок не приводит к следующему шагу.",
+    "word_usage": "Четкая и уверенная речь повышает доверие и делает аргументацию сильнее.",
+    "general": "Эта рекомендация поможет сделать разговор более структурным и результативным.",
+}
+
+def _canonical_category(value) -> str:
+    text = _clean_str(value).casefold()
+    return CATEGORY_ALIASES.get(text, "general")
+
 def _normalize_stage_list(stages):
     normalized = []
 
@@ -115,16 +165,40 @@ def _normalize_missing_stages(raw_script, script_check_result):
 
     result = []
     for item in _as_list(source):
-        if isinstance(item, dict):
-            stage_name = _clean_str(item.get("stage"))
+        parsed = item
+
+        if isinstance(item, str):
+            text = item.strip()
+            if not text:
+                continue
+            try:
+                literal = ast.literal_eval(text)
+                if isinstance(literal, dict):
+                    parsed = literal
+                else:
+                    parsed = text
+            except Exception:
+                parsed = text
+
+        if isinstance(parsed, dict):
+            stage_name = _clean_str(parsed.get("stage"))
             if stage_name:
                 result.append(stage_name)
         else:
-            text = _clean_str(item)
+            text = _clean_str(parsed)
             if text:
                 result.append(text)
 
-    return result
+    # убираем дубли, сохраняя порядок
+    unique = []
+    seen = set()
+    for item in result:
+        key = item.casefold()
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+
+    return unique
 
 def _normalize_violations(raw_script, script_check_result):
     source = raw_script.get("violations")
@@ -207,29 +281,19 @@ def _normalize_recommendation_item(item):
             if isinstance(literal, dict):
                 parsed = literal
             else:
-                return {
-                    "type": "general",
-                    "category": "general",
-                    "text": text,
-                }
+                parsed = {"text": text}
         except Exception:
-            return {
-                "type": "general",
-                "category": "general",
-                "text": text,
-            }
+            parsed = {"text": text}
 
     if not isinstance(parsed, dict):
         text = _clean_str(parsed)
         if not text:
             return None
-        return {
-            "type": "general",
-            "category": "general",
-            "text": text,
-        }
+        parsed = {"text": text}
 
-    rec_type = _first_nonempty_str(parsed.get("type"), parsed.get("category"), "general")
+    raw_type = _first_nonempty_str(parsed.get("type"))
+    raw_category = _first_nonempty_str(parsed.get("category"), raw_type, "general")
+
     text = _first_nonempty_str(
         parsed.get("text"),
         parsed.get("recommendation"),
@@ -239,28 +303,48 @@ def _normalize_recommendation_item(item):
         parsed.get("suggestedText"),
         parsed.get("description"),
     )
-
     if not text:
         return None
 
-    category = _first_nonempty_str(parsed.get("category"), rec_type, "general")
+    canonical = _canonical_category(raw_category)
 
     return {
-        "type": rec_type,
-        "category": category,
+        "type": raw_type or canonical,
+        "category": canonical,
         "text": text,
+        "zone_of_growth": CATEGORY_TITLES.get(canonical, CATEGORY_TITLES["general"]),
+        "why_important": CATEGORY_IMPORTANCE.get(canonical, CATEGORY_IMPORTANCE["general"]),
+        "what_to_improve": text,
     }
 
 def _normalize_recommendations(raw_recommendations, coaching_result):
     source = raw_recommendations
-    if not _has_content(source):
+    if not source:
         source = coaching_result.get("recommendations", []) or []
 
     normalized = []
+    seen_categories = set()
+    seen_texts = set()
+
     for item in _as_list(source):
         rec = _normalize_recommendation_item(item)
-        if rec:
-            normalized.append(rec)
+        if not rec:
+            continue
+
+        text_key = rec["text"].strip().casefold()
+        cat_key = rec["category"].strip().casefold()
+
+        if text_key in seen_texts:
+            continue
+
+        # если уже была рекомендация для этой же зоны роста,
+        # вторую добавляем только если текст заметно отличается и категория general не захватывает всё подряд
+        if cat_key in seen_categories and cat_key != "general":
+            continue
+
+        seen_texts.add(text_key)
+        seen_categories.add(cat_key)
+        normalized.append(rec)
 
     return normalized
 

@@ -25,6 +25,9 @@ class RecommendationSchema(BaseModel):
     type: str
     category: str
     text: str
+    zone_of_growth: str
+    why_important: str
+    what_to_improve: str
 
 class MetaSchema(BaseModel):
     main_errors: List[str]

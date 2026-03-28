@@ -6,12 +6,14 @@ from langgraph.graph import END, START, StateGraph
 
 from app.llm_module.gigachat_client import GigaChatClient
 
-
 class PipelineState(TypedDict, total=False):
     transcript: str
     normalized_transcript: str
     speaker_markup_done: bool
 
+    role_transcript: str
+    classification_result: Dict[str, Any]
+    
     stages_text: str
     script_text: str
     criteria_text: str
@@ -269,6 +271,38 @@ class GigaChatAgentPipeline:
                 "found": found,
                 "quotes": quotes
             })
+
+        return normalized
+
+    def _normalize_recommendations(self, value: Any) -> List[Any]:
+        value = self._try_parse_json_string(value)
+
+        if isinstance(value, dict):
+            value = [value]
+
+        if not isinstance(value, list):
+            return []
+
+        normalized = []
+
+        for item in value:
+            item = self._try_parse_json_string(item)
+
+            if isinstance(item, dict):
+                rec_type = str(item.get("type", "")).strip()
+                category = str(item.get("category", "")).strip() or rec_type
+                text = str(item.get("text", "")).strip() or str(item.get("recommendation", "")).strip()
+
+                if rec_type or category or text:
+                    normalized.append({
+                        "type": rec_type,
+                        "category": category,
+                        "text": text
+                    })
+                continue
+
+            if isinstance(item, str) and item.strip():
+                normalized.append(item.strip())
 
         return normalized
 
@@ -752,10 +786,29 @@ class GigaChatAgentPipeline:
 Без пояснений.
 Ответ должен начинаться с { и заканчиваться }.
 
+ВАЖНО:
+- "recommendations" должен быть списком объектов, а не строк.
+- Каждый объект должен иметь поля:
+  {
+    "type": "greeting",
+    "text": "..."
+  }
+- Верни от 3 до 4 рекомендаций, не больше.
+- Каждая рекомендация должна относиться к отдельной зоне роста.
+- Не дублируй рекомендации по смыслу.
+- Пиши кратко: 1–2 предложения на рекомендацию.
+- Не давай длинные готовые скрипты целиком, а формулируй конкретное улучшение.
+- Приоритет: пропущенные этапы и самые важные ошибки менеджера.
+
 Формат:
 {
-  "recommendations": [],
-  "training_focus": []
+  "recommendations": [
+    {
+      "type": "greeting",
+      "text": "..."
+    }
+  ],
+  "training_focus": ["..."]
 }
 """.strip()
 
@@ -773,7 +826,7 @@ class GigaChatAgentPipeline:
         result.setdefault("recommendations", [])
         result.setdefault("training_focus", [])
 
-        result["recommendations"] = self._normalize_list(result["recommendations"])
+        result["recommendations"] = self._normalize_recommendations(result["recommendations"])
         result["training_focus"] = self._normalize_list(result["training_focus"])
         result["usage"] = llm_result.get("usage", {})
 
@@ -794,12 +847,26 @@ class GigaChatAgentPipeline:
 Без пояснений.
 Ответ должен начинаться с { и заканчиваться }.
 
+ВАЖНО:
+- "recommendations" должен быть списком объектов, а не строк.
+- Каждый объект в "recommendations" должен иметь поля:
+  {
+    "type": "...",
+    "text": "..."
+  }
+- Не превращай объекты в строку.
+
 Формат:
 {
   "summary": "...",
   "score": 0,
   "main_errors": [],
-  "recommendations": [],
+  "recommendations": [
+    {
+      "type": "greeting",
+      "text": "..."
+    }
+  ],
   "conclusion": "..."
 }
 """.strip()
@@ -835,7 +902,7 @@ class GigaChatAgentPipeline:
         result["score"] = max(0, min(100, result["score"]))
         result["summary"] = str(result["summary"]).strip()
         result["main_errors"] = self._normalize_list(result["main_errors"])
-        result["recommendations"] = self._normalize_list(result["recommendations"])
+        result["recommendations"] = self._normalize_recommendations(result["recommendations"])
         result["conclusion"] = str(result["conclusion"]).strip()
         result["usage"] = llm_result.get("usage", {})
 
@@ -973,6 +1040,7 @@ class GigaChatAgentPipeline:
         normalized_transcript = self._markup_transcript_by_speakers(state["transcript"])
         return {
             "normalized_transcript": normalized_transcript,
+            "role_transcript": normalized_transcript,
             "speaker_markup_done": True,
             "step_count": int(state.get("step_count", 0) or 0) + 1
         }
@@ -991,6 +1059,14 @@ class GigaChatAgentPipeline:
             "blocked": blocked,
             "block_reason": reason,
             "short_summary": short_summary,
+            "classification_result": {
+                "is_prompt_injection": bool(result["is_prompt_injection"]),
+                "is_sales_related": bool(result["is_sales_related"]),
+                "reason": reason,
+                "short_summary": short_summary,
+                "role_transcript": state.get("normalized_transcript", state["transcript"]),
+                "usage": result.get("usage", {})
+            },
             "step_count": int(state.get("step_count", 0) or 0) + 1
         }
 
@@ -1153,6 +1229,8 @@ class GigaChatAgentPipeline:
             "transcript": transcript,
             "normalized_transcript": transcript,
             "speaker_markup_done": False,
+            "role_transcript": transcript,
+            "classification_result": {},
 
             "stages_text": stages_text,
             "script_text": script_text,
@@ -1246,6 +1324,8 @@ class GigaChatAgentPipeline:
             }
 
         return {
+            "role_transcript": final_state.get("role_transcript", final_state.get("normalized_transcript", transcript)),
+            "classification_result": final_state.get("classification_result", {}),
             "structure_result": structure_result,
             "script_check_result": script_check_result,
             "errors_result": errors_result,

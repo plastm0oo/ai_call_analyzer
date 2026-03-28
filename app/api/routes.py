@@ -21,7 +21,7 @@ os.makedirs(PDF_DIR, exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(REPORT_DIR, exist_ok=True)
 
-@router.post("/calls/upload", response_model=UploadCallResponse)
+@router.post("/calls/upload")
 async def upload_call(file: UploadFile = File(...)):
     allowed_extensions = (".wav", ".mp3")
 
